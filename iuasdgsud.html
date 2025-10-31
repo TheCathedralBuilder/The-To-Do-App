@@ -1,0 +1,1351 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Pro To‑Do App with Music</title>
+<script type="module">
+	import * as musicMetadata from 'https://cdn.jsdelivr.net/npm/music-metadata-browser/dist/music-metadata-browser.es.js';
+	window.musicMetadata = musicMetadata;
+</script>
+<style>
+/* --- DARK MODE (Default) --- */
+:root, body.dark{
+	--bg:#0f1724;
+	--card:#0b1220;
+	--text-color:#e6eef6;
+	--muted:#9aa4b2;
+	--accent:#60a5fa;
+	--accent-2:#7c3aed;
+	--placeholder-color: #334155;
+	--card-shadow: 0 6px 30px rgba(2,6,23,0.6);
+	--input-bg: transparent;
+	--task-bg: linear-gradient(180deg, rgba(255,255,255,0.01), rgba(0,0,0,0.03));
+	--card-gradient: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.06));
+	--body-gradient: linear-gradient(180deg,#f1f5f9 0%,#f8fafc 100%); /* Static light gradient for fallback */
+	--border-color: rgba(255,255,255,0.04);
+	--due-soon: #f97316; /* Orange 600 */
+	/* Pomodoro Colors REMOVED */
+	--timer-bg: #1e293b;
+	--timer-active: var(--accent-2); 
+	--timer-break: #22c55e; 
+}
+
+/* --- LIGHT MODE --- */
+body.light{
+	--bg:#f8fafc;
+	--card:#ffffff;
+	--text-color:#1e293b;
+	--muted:#64748b;
+	--accent:#1d4ed8;
+	--accent-2:#9333ea;
+	--placeholder-color: #e2e8f0;
+	--card-shadow: 0 4px 15px rgba(0,0,0,0.1);
+	--input-bg: #f1f5f9;
+	--task-bg: #f9fafb;
+	--card-gradient: #ffffff;
+	--body-gradient: linear-gradient(180deg,#f1f5f9 0%,#f8fafc 100%);
+	--border-color: #e2e8f0;
+	--due-soon: #f97316;
+	/* Pomodoro Colors REMOVED */
+	--timer-bg: #e2e8f0;
+	--timer-active: var(--accent-2);
+	--timer-break: #10b981;
+}
+
+/* --- ANIMATED BACKGROUND STYLES --- */
+
+/* 1. Animated Gradient Keyframes */
+@keyframes gradient-shift {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+/* 2. Particle Keyframes (Subtle movement) */
+@keyframes particle-move {
+    0% { transform: translate(0, 0); }
+    100% { transform: translate(-50px, -50px); }
+}
+
+/* CORE BODY STYLES */
+*{box-sizing:border-box}html,body{height:100%}
+body{
+	margin:0;
+	font-family:Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+	background:var(--bg); /* Solid color base, the animation will be in ::before */
+	color:var(--text-color);	
+	display:flex;
+	flex-direction:column;
+	align-items:center;
+	justify-content:flex-start;
+	padding:20px;
+	transition:color 0.5s ease; /* Only transition text color, background handled by ::before */
+	overflow-x: hidden; /* Ensure horizontal scrolling is prevented */
+}
+
+/* Animated Gradient Background Layer (::before) - Deepest Layer */
+body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -2; 
+    /* Base dark colors for the animation. Transitions smoothly to light mode gradient. */
+    background: linear-gradient(-45deg, #0b1220, #1a233b, #0f1724, #050a14); 
+    background-size: 400% 400%;
+    animation: gradient-shift 25s ease infinite;
+    transition: background 0.8s ease, opacity 0.8s ease;
+}
+
+/* Particle Effect Overlay (::after) - Layer 2 (Dark Mode Only) */
+body.dark::after {
+    content: '';
+    position: fixed;
+    top: -50px;
+    left: -50px;
+    width: 200%;
+    height: 200%;
+    z-index: -1; 
+    opacity: 0.1; /* Very subtle */
+    /* Creates a grid of small dots that move slowly */
+    background-image: radial-gradient(var(--text-color) 1px, transparent 1px);
+    background-size: 20px 20px;
+    animation: particle-move 60s linear infinite;
+    transition: opacity 0.8s ease;
+}
+
+/* Adjusting ::before for Light Mode: static gradient, no animation */
+body.light::before {
+    background: var(--body-gradient); 
+    background-size: 100% 100%;
+    animation: none;
+}
+
+/* Hiding ::after (particles) in Light Mode */
+body.light::after {
+    opacity: 0; 
+}
+
+
+/* --- REST OF ORIGINAL CSS REMAINS UNCHANGED --- */
+
+.app{width:100%;max-width:760px}
+.card{
+	background:var(--card-gradient);	
+	border-radius:12px;
+	padding:22px;
+	box-shadow:var(--card-shadow);	
+	margin-bottom:20px;
+	border: 1px solid var(--border-color);
+}
+h1,h2{margin:0 0 6px;font-size:20px;letter-spacing:0.4px; color: var(--text-color);}
+p.lead{margin:0 0 18px;color:var(--muted);font-size:13px}
+.input-row{display:flex;gap:10px}
+input.new-task{
+	flex:1;padding:12px 14px;border-radius:10px;
+	border:1px solid var(--border-color);	
+	background:var(--input-bg);	
+	color:inherit;font-size:15px;
+}
+button.add{padding:0 14px;border-radius:10px;border:0;background:linear-gradient(90deg,var(--accent),var(--accent-2));color:#fff;font-weight:600}
+
+.controls{display:flex;justify-content:space-between;align-items:center;margin-top:16px}
+.filters{display:flex;gap:8px}
+.filter-btn{padding:6px 10px;border-radius:8px;border:0;background:transparent;color:var(--muted);font-size:13px}
+.filter-btn.active{background:var(--border-color);color:var(--text-color)}	
+
+.search-input { 
+	width: 100%;
+	margin-bottom: 12px;
+	padding: 8px 10px;
+	border-radius: 8px;
+	border: 1px solid var(--border-color);	
+	background: var(--input-bg);	
+	color: inherit;
+	font-size: 14px;
+}
+
+.list{margin-top:18px;max-height:420px;overflow:auto;padding-right:6px}
+.task{
+	display:flex;align-items:center;gap:12px;padding:10px;border-radius:10px;margin-bottom:8px;
+	background:var(--task-bg);	
+	cursor: grab; /* Drag cursor */
+	transition: background 0.3s, transform 0.3s;
+}
+.task.dragging { 
+	opacity: 0.5;
+	transform: scale(1.02);
+	box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+}
+.task .checkbox{
+	width:18px;height:18px;border-radius:6px;
+	border:1px solid var(--border-color);	
+	display:flex;align-items:center;justify-content:center;cursor:pointer;
+	flex-shrink: 0;
+}
+.task.done .label{text-decoration:line-through;color:var(--muted)}
+.label{flex:1; display: flex; flex-direction: column;}
+.task-text {font-weight: 500;}
+.task-meta {font-size: 11px; color: var(--muted); margin-top: 2px;}
+.due-date {color: var(--due-soon); font-weight: 600;} 
+.task-tag {
+	display: inline-block;
+	padding: 1px 6px;
+	margin-left: 6px;
+	border-radius: 4px;
+	font-size: 10px;
+	font-weight: 600;
+	color: var(--text-color);
+	background: var(--accent);
+}
+.actions{display:flex;gap:8px}
+.icon-btn{background:transparent;border:0;color:var(--muted);cursor:pointer;padding:6px;border-radius:8px}
+.small{font-size:13px;color:var(--muted)}
+footer.tools{display:flex;justify-content:space-between;align-items:center;margin-top:14px}
+.btn-clear{
+	background:transparent;
+	border:1px solid var(--border-color);	
+	padding:8px 12px;border-radius:8px;color:var(--muted)
+}
+
+/* --- Music Player Styles - REVISED LOOK --- */
+#musicPlayerSection {
+	display: flex;	
+	flex-direction: column;	
+	gap: 15px;	
+	margin-top: 20px;
+	background:var(--card-gradient);	
+	border-radius: 12px;
+	padding: 22px;
+	box-shadow:var(--card-shadow);
+	border: 1px solid var(--border-color);
+}
+.player-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+}
+#themeToggleBtn {
+	background: transparent;
+	border: none;
+	cursor: pointer;
+	font-size: 1.5em;
+	color: var(--text-color);
+	padding: 0;
+}
+.player-content {
+	display: flex;
+	flex-direction: column; /* Start with column for mobile-first approach */
+	align-items: center;
+	width: 100%;
+	gap: 20px;
+	margin-top: 5px;
+	padding: 15px 0;
+}
+#albumCover{
+	width: 100px; /* Increased size */
+	height: 100px;
+	object-fit: cover;
+	border-radius: 12px; /* Slightly more rounded */
+	background-color: var(--placeholder-color);	
+	transition: transform 3s linear;
+	flex-shrink: 0;	
+	box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3); /* Subtle shadow for depth */
+}
+#albumCover.rotate{transform:rotate(360deg)}
+#playerControls {
+	flex-grow: 1;	
+	width: 100%; 
+	max-width: 400px; 
+	display: flex;
+	flex-direction: column;
+	gap: 12px; 
+}
+#playlistCount {
+	color: var(--muted);
+	font-size: 0.8em;
+	text-align: center; 
+	padding-top: 5px; /* Added spacing */
+}
+#trackInfo{
+	text-align: center; 
+	display: none; /* Controlled by JS based on music loading */
+	margin-bottom: 5px;	
+	order: -1; /* Move track info above controls on mobile for stacking */
+}
+.track-title{font-size:1.1em;font-weight:700;margin-bottom:2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
+.track-artist{font-size:0.9em;color:var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
+audio{
+	width:100%;
+	border-radius: 8px; 
+	background: var(--input-bg); 
+}
+.manual-input {
+	display: flex;
+	gap: 10px;
+}
+.manual-input input {
+	flex: 1;
+	padding: 8px 10px;
+	border-radius: 8px;
+	border: 1px solid var(--border-color);
+	background: var(--input-bg);
+	color: inherit;
+	font-size: 14px;
+}
+
+
+@media (min-width: 521px) {
+	/* Tablet/Desktop layout for the player */
+	.player-content {
+		flex-direction: row; 
+		align-items: center; 
+		gap: 25px;
+	}
+	#playerControls {
+		max-width: none; 
+	}
+	#trackInfo {
+		order: initial; 
+		text-align: left; 
+		margin-bottom: 0;
+		flex-grow: 1; 
+		display: flex !important;
+		flex-direction: column;
+		justify-content: center; 
+		height: 100px; 
+	}
+	#playlistCount {
+		text-align: right;
+		padding-top: 0;
+	}
+	.manual-input {
+		flex-direction: row;
+	}
+}
+
+@media (max-width: 520px) {
+	.manual-input {
+		flex-direction: column;
+	}
+	/* Mobile: Keep player-content as column, centered */
+	#trackInfo { text-align: center; }	
+	#albumCover { margin-bottom: 0px; }	
+}
+
+/* --- LLM FEATURE STYLES: Loading Spinner/Overlay --- */
+.spinner {
+  border: 4px solid rgba(255, 255, 255, 0.1);
+  border-top: 4px solid var(--accent);
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  animation: spin 1s linear infinite;
+  margin: 0 auto;
+}
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.breakdown-btn {
+	background: linear-gradient(90deg, #fde047, #f97316); /* Yellow/Orange gradient */
+	color: #1e293b;
+	font-weight: 700;
+	border-radius: 8px;
+	padding: 6px 10px;
+	cursor: pointer;
+	border: none;
+	transition: transform 0.1s;
+}
+
+.breakdown-btn:active {
+	transform: scale(0.95);
+}
+
+</style>
+</head>
+<body class="dark">	
+<main class="app">
+<section class="card">
+<h1>Pro To‑Do App</h1>
+<p class="lead">Add tasks, reorder them with drag & drop, and listen to your local playlists.</p>
+<div class="input-row">
+<input class="new-task" id="newTaskInput" placeholder="Add a task, e.g. 'Email John about the project'" />
+<button class="add" id="addBtn">Add</button>
+</div>
+<input type="text" id="searchTaskInput" class="search-input" placeholder="Search tasks..." />
+
+<div class="controls">
+<div class="filters" role="tablist">
+<button class="filter-btn active" data-filter="all">All</button>
+<button class="filter-btn" data-filter="active">Active</button>
+<button class="filter-btn" data-filter="completed">Completed</button>
+</div>
+<div class="small" id="taskCount">0 items</div>
+</div>
+<div class="list" id="taskList" aria-live="polite"></div>
+<footer class="tools">
+<button class="btn-clear" id="clearCompleted">Clear completed</button>
+<div class="small">Tip: drag tasks to reorder them</div>
+</footer>
+</section>
+
+<section id="musicPlayerSection">
+	<div class="player-header">
+		<div style="display: flex; align-items: center; gap: 15px;">
+			<h2>Music Player</h2>
+			<!-- Instagram Support Link -->
+			<a href="https://instagram.com/yo__cjay" target="_blank" style="display: flex; align-items: center; font-size: 14px; text-decoration: none;" aria-label="Support me on Instagram: yo__cjay">
+				<!-- Instagram SVG Icon -->
+				<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent);">
+					<rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect>
+					<path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
+					<line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line>
+				</svg>
+				<span style="margin-left: 4px; color: var(--text-color); font-weight: 600;">@yo__cjay</span>
+			</a>
+		</div>
+		<button id="themeToggleBtn" aria-label="Toggle light and dark mode">
+			☀️
+		</button>
+	</div>
+	
+	<input type="file" id="musicFile" accept="audio/*" multiple style="width:100%; margin-bottom: 5px;"/>
+	
+	<div class="manual-input">
+		<input type="text" id="manualTitle" placeholder="Manually set song title" />
+		<!-- Manual Artist Input REMOVED -->
+	</div>
+
+	<div class="player-content">
+		<img id="albumCover" alt="Album Cover" src="data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==">
+		
+		<!-- Track Info moved here for better desktop/tablet layout -->
+		<div id="trackInfo">
+			<div class="track-title" id="trackTitle"></div>
+			<div class="track-artist" id="trackArtist"></div>
+		</div>
+
+		<div id="playerControls">
+			<audio id="audioPlayer" controls></audio>
+			
+			<div id="playlistCount"></div>	
+		</div>
+	</div>
+</section>
+
+</main>
+
+<!-- LLM Feature: Loading Overlay -->
+<div id="loadingOverlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); display: none; justify-content: center; align-items: center; z-index: 1000; border-radius: 0;">
+    <div style="background: var(--card); padding: 30px; border-radius: 12px; text-align: center; color: var(--text-color); box-shadow: var(--card-shadow);">
+        <p style="margin-bottom: 15px; font-weight: 600;">✨ Generating Sub-Tasks...</p>
+        <div class="spinner"></div>
+    </div>
+</div>
+
+<script>
+// FIX: Wrapping the entire application logic in a window 'load' event listener 
+// ensures that most DOM elements and external resources (scripts, images) have loaded.
+window.addEventListener('load', async () => {
+	
+// --- THEME LOGIC ---
+const themeToggleBtn = document.getElementById('themeToggleBtn');
+const body = document.body;
+const THEME_STORAGE_KEY = 'app_theme';
+
+function setInitialTheme() {
+	const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+	const initialTheme = savedTheme || 'dark';
+	body.className = initialTheme;
+	themeToggleBtn.textContent = initialTheme === 'dark' ? '☀️' : '🌙';
+}
+
+function toggleTheme() {
+	const currentTheme = body.classList.contains('dark') ? 'dark' : 'light';
+	const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+	
+	body.classList.remove(currentTheme);
+	body.classList.add(newTheme);
+	
+	localStorage.setItem(THEME_STORAGE_KEY, newTheme);
+	themeToggleBtn.textContent = newTheme === 'dark' ? '☀️' : '🌙';
+}
+
+themeToggleBtn.addEventListener('click', toggleTheme);
+setInitialTheme();	
+
+// --- LLM API INTEGRATION ---
+const apiKey = ""; 
+const MODEL_NAME = "gemini-2.5-flash-preview-09-2025";
+const loadingOverlay = document.getElementById('loadingOverlay');
+
+function showLoading() { loadingOverlay.style.display = 'flex'; }
+function hideLoading() { loadingOverlay.style.display = 'none'; }
+
+// Utility function to call the Gemini API with exponential backoff
+async function callGeminiApi(payload) {
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
+    const MAX_RETRIES = 3;
+    let delay = 1000;
+
+    for (let i = 0; i < MAX_RETRIES; i++) {
+        try {
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                // If 429 (Too Many Requests) or other retryable error, throw to retry
+                if (response.status === 429 || response.status >= 500) {
+                    throw new Error(`API call failed with status ${response.status}. Retrying...`);
+                }
+                // For non-retryable errors (e.g., 400 Bad Request), parse and return error
+                const errorBody = await response.json();
+                console.error('Non-retryable API error:', errorBody);
+                return { error: errorBody.error?.message || 'Failed to process request.' };
+            }
+
+            const result = await response.json();
+            const jsonText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+
+            if (jsonText) {
+                try {
+                    // Attempt to parse the JSON string from the model response
+                    const parsedJson = JSON.parse(jsonText);
+                    return { data: parsedJson };
+                } catch (e) {
+                    console.error('Failed to parse JSON response:', e, jsonText);
+                    return { error: 'Model returned unparseable data.' };
+                }
+            } else {
+                 console.error('Model response lacked text content:', result);
+                 return { error: 'Model did not return content.' };
+            }
+
+        } catch (error) {
+            console.warn(`Attempt ${i + 1} failed.`, error.message);
+            if (i < MAX_RETRIES - 1) {
+                await new Promise(resolve => setTimeout(resolve, delay));
+                delay *= 2; // Exponential backoff
+            } else {
+                return { error: 'API call failed after multiple retries.' };
+            }
+        }
+    }
+}
+
+async function breakdownTask(task) {
+    showLoading();
+	
+    const userQuery = `Break down the following complex task into 3 to 7 small, actionable, chronological sub-tasks suitable for a to-do list: "${task.text}"`;
+    
+    const payload = {
+        contents: [{ parts: [{ text: userQuery }] }],
+        config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: "ARRAY",
+                description: "A list of strings, where each string is a single, clear sub-task.",
+                items: { type: "STRING" }
+            }
+        }
+    };
+    
+    const { data, error } = await callGeminiApi(payload);
+
+    if (error) {
+        console.error('Task breakdown failed:', error);
+        alert(`Error: Could not generate sub-tasks. ${error}`);
+    } else if (data && Array.isArray(data)) {
+        // Add the generated sub-tasks to the list
+        data.reverse().forEach(subTask => { // Reverse so they appear in correct order
+            // Add a parent task reference or category to the sub-tasks for context
+            addTask(`[Sub] ${subTask}`, task.id); 
+        });
+        
+        // Optional: Mark the original task as done or change its text
+        // For now, we'll just leave it and let the user mark it.
+        saveAndRender();
+        
+    } else {
+        alert("Task breakdown failed. Please check the console for details.");
+    }
+    
+    hideLoading();
+}
+
+// --- TO-DO LOGIC ---
+const STORAGE_KEY='todo_tasks_v1';
+const newTaskInput=document.getElementById('newTaskInput');
+const addBtn=document.getElementById('addBtn');
+const taskList=document.getElementById('taskList');
+const taskCount=document.getElementById('taskCount');
+const filters=document.querySelectorAll('.filter-btn');
+const clearCompleted=document.getElementById('clearCompleted');
+const searchTaskInput = document.getElementById('searchTaskInput'); 
+let tasks=JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]');
+let currentFilter='all';
+let currentSearchTerm=''; 
+
+function saveAndRender(){localStorage.setItem(STORAGE_KEY,JSON.stringify(tasks));render();}
+
+function getDueDateString(dateString) {
+	if (!dateString) return '';
+	const due = new Date(dateString);
+	const today = new Date();
+	today.setHours(0, 0, 0, 0);	
+	const diff = due.getTime() - today.getTime();
+	const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
+	
+	if (days < 0) return 'Overdue';
+	if (days === 0) return 'Due Today!';
+	if (days === 1) return 'Due Tomorrow';
+	return `Due in ${days} days`;
+}
+
+function addTask(text, parentId = null){
+	// Syntax for adding due date and tag: "Task text // [YYYY-MM-DD] #Tag"
+	const match = text.match(/\/\/\s*(\[\d{4}-\d{2}-\d{2}\])?\s*(#\w+)?/);
+	let taskText = text.trim();
+	let dueDate = null;
+	let tag = null;
+
+	if (match) {
+		taskText = text.substring(0, match.index).trim();
+		if (match[1]) {
+			dueDate = match[1].substring(1, 11);
+		}
+		if (match[2]) {
+			tag = match[2].substring(1); // Remove '#'
+		}
+	}
+	
+	if(!taskText) return;
+
+	const task={
+		id:Date.now(),
+		text:taskText,
+		done:false,
+		dueDate: dueDate, 
+		tag: tag,
+		parentId: parentId // Added for context
+	};
+	tasks.unshift(task);
+	saveAndRender();
+}
+
+function removeTask(id){tasks=tasks.filter(t=>t.id!==id);saveAndRender();}
+function toggleTask(id){tasks=tasks.map(t=>t.id===id?{...t,done:!t.done}:t);saveAndRender();}
+function editTask(id,newText){tasks=tasks.map(t=>t.id===id?{...t,text:newText.trim()}:t);saveAndRender();}
+function clearCompletedTasks(){tasks=tasks.filter(t=>!t.done);saveAndRender();}
+
+function render(){
+	taskList.innerHTML='';
+	
+	const searchTerm = currentSearchTerm.toLowerCase();
+
+	const filtered = tasks.filter(t => {
+		const matchesFilter = currentFilter==='all' ? true : currentFilter==='active' ? !t.done : t.done;
+		const matchesSearch = t.text.toLowerCase().includes(searchTerm) || (t.tag && t.tag.toLowerCase().includes(searchTerm));
+		return matchesFilter && matchesSearch;
+	});
+
+	if(filtered.length===0){
+		taskList.innerHTML='<div class="small" style="padding:12px;color:var(--muted)">No matching tasks.</div>'
+	} else {
+		filtered.forEach(t=>{
+			const el=document.createElement('div');
+			el.className='task'+(t.done?' done':'');
+			el.setAttribute('data-id', t.id); 
+			el.setAttribute('draggable', 'true'); 
+
+			const cb=document.createElement('div');
+			cb.className='checkbox';
+			cb.title='Toggle complete';
+			cb.addEventListener('click',()=>toggleTask(t.id));
+			cb.innerHTML=t.done?'✓':'';
+			
+			const label=document.createElement('div');
+			label.className='label';
+			label.title='Double-click to edit';
+			label.addEventListener('dblclick',()=>startEditing(el,t));
+			
+			const textEl = document.createElement('div');
+			textEl.className = 'task-text';
+			textEl.textContent = t.text;
+			
+			const metaEl = document.createElement('div');
+			metaEl.className = 'task-meta';
+			
+			let metaHTML = '';
+			if (t.tag) {
+				metaHTML += `<span class="task-tag" style="background:var(--accent);">${t.tag}</span>`;
+			}
+			if (t.dueDate) {
+				const dateString = getDueDateString(t.dueDate);
+				const isUrgent = dateString === 'Due Today!' || dateString === 'Due Tomorrow' || dateString === 'Overdue';
+				metaHTML += `<span class="due-date" style="${isUrgent ? 'color: var(--due-soon);' : ''}">${dateString}</span>`;
+			}
+			metaEl.innerHTML = metaHTML;
+			
+			label.append(textEl, metaEl);
+
+			const actions=document.createElement('div');actions.className='actions';
+			
+			// --- LLM Feature Button ---
+			const breakdownBtn=document.createElement('button');
+			breakdownBtn.className='icon-btn breakdown-btn';
+			breakdownBtn.innerHTML='✨'; 
+			breakdownBtn.title='AI Task Breakdown: Split into sub-tasks';
+			// Prevent the AI button from showing on generated sub-tasks
+			if (!t.text.startsWith('[Sub]')) { 
+				breakdownBtn.addEventListener('click', (e) => {
+					e.stopPropagation();
+					breakdownTask(t);
+				});
+				actions.append(breakdownBtn);
+			}
+			// --- End LLM Feature Button ---
+			
+			const editBtn=document.createElement('button');editBtn.className='icon-btn';editBtn.innerHTML='✏️';editBtn.title='Edit';editBtn.addEventListener('click',()=>startEditing(el,t));
+			const delBtn=document.createElement('button');delBtn.className='icon-btn';delBtn.innerHTML='🗑️';delBtn.title='Delete';delBtn.addEventListener('click',()=>removeTask(t.id));
+			actions.append(editBtn,delBtn);el.append(cb,label,actions);taskList.appendChild(el);
+			
+			// Re-apply drag/drop listeners after element creation
+			addDragListeners(el);
+		});
+	}
+	taskCount.textContent=`${tasks.filter(t=>!t.done).length} items left`;
+	filters.forEach(btn=>btn.classList.toggle('active',btn.dataset.filter===currentFilter));
+}
+
+function startEditing(containerEl,task){
+	const label=containerEl.querySelector('.label');
+	const input=document.createElement('input');
+	input.type='text';
+	
+	// Add original meta info back into the input for editing
+	let initialValue = task.text;
+	if (task.dueDate) initialValue += ` // [${task.dueDate}]`;
+	if (task.tag) initialValue += ` #${task.tag}`;
+
+	input.value=initialValue;
+	input.style.padding='8px';input.style.borderRadius='8px';input.style.flex='1';
+
+	function finish(save){
+		if(save){
+			// Reparse the input value to save date and tag
+			const inputVal = input.value;
+			const match = inputVal.match(/\/\/\s*(\[\d{4}-\d{2}-\d{2}\])?\s*(#\w+)?/);
+			let newText = inputVal.trim();
+			let newDueDate = null;
+			let newTag = null;
+
+			if (match) {
+				newText = inputVal.substring(0, match.index).trim();
+				if (match[1]) {
+					newDueDate = match[1].substring(1, 11);
+				}
+				if (match[2]) {
+					newTag = match[2].substring(1);	
+				}
+			}
+
+			tasks = tasks.map(t => t.id === task.id ? {
+				...t,	
+				text: newText,	
+				dueDate: newDueDate,	
+				tag: newTag	
+			} : t);
+			saveAndRender();
+		} else {
+			render();
+		}
+	}
+
+	input.addEventListener('keydown',e=>{if(e.key==='Enter')finish(true);if(e.key==='Escape')finish(false);});
+	input.addEventListener('blur',()=>finish(true));
+	containerEl.replaceChild(input,label);
+	input.focus();
+	input.setSelectionRange(input.value.length,input.value.length);
+}
+
+// --- DRAG & DROP FUNCTIONS ---
+let draggedItem = null;
+
+function addDragListeners(el) {
+	el.addEventListener('dragstart', handleDragStart);
+	el.addEventListener('dragover', handleDragOver);
+	el.addEventListener('dragleave', handleDragLeave);
+	el.addEventListener('drop', handleDrop);
+	el.addEventListener('dragend', handleDragEnd);
+}
+
+function getDragAfterElement(container, y) {
+	const draggableElements = [...container.querySelectorAll('.task:not(.dragging)')];
+
+	return draggableElements.reduce((closest, child) => {
+		const rect = child.getBoundingClientRect();
+		const offset = y - rect.top - rect.height / 2;
+		if (offset < 0 && offset > closest.offset) {
+			return { offset: offset, element: child };
+		} else {
+			return closest;
+		}
+	}, { offset: -Infinity }).element;
+}
+
+function handleDragStart(e) {
+	draggedItem = this;
+	setTimeout(() => this.classList.add('dragging'), 0);	
+	e.dataTransfer.effectAllowed = 'move';
+}
+
+function handleDragOver(e) {
+	e.preventDefault();
+	const afterElement = getDragAfterElement(taskList, e.clientY);
+	const dragging = document.querySelector('.dragging');
+
+	if (dragging) {
+		if (afterElement == null) {
+			taskList.appendChild(dragging);
+		} else {
+			taskList.insertBefore(dragging, afterElement);
+		}
+	}
+}
+
+function handleDragLeave(e) {
+	// Clean up dragover visual effects if necessary
+}
+
+function handleDrop(e) {
+	e.stopPropagation();
+	
+	if (draggedItem) {
+		const newOrderElements = [...taskList.children];
+		const newOrderIds = newOrderElements.map(el => parseInt(el.getAttribute('data-id')));
+		
+		const idToTaskMap = new Map(tasks.map(t => [t.id, t]));
+		
+		let updatedTasks = [];
+		let processedIds = new Set();
+		
+		// 1. Add reordered (visible) tasks
+		newOrderIds.forEach(id => {
+			const task = idToTaskMap.get(id);
+			if (task) {
+				updatedTasks.push(task);
+				processedIds.add(id);
+			}
+		});
+
+		// 2. Add non-rendered (filtered out) tasks back to the end
+		tasks.forEach(task => {
+			if (!processedIds.has(task.id)) {
+				updatedTasks.push(task);
+			}
+		});
+		
+		tasks = updatedTasks;
+		saveAndRender();
+	}
+	return false;
+}
+
+function handleDragEnd(e) {
+	this.classList.remove('dragging');
+	draggedItem = null;
+	render();	
+}
+// --- END DRAG & DROP FUNCTIONS ---
+
+
+// --- MUSIC PLAYER LOGIC ---
+
+const musicFile = document.getElementById('musicFile');
+const audioPlayer = document.getElementById('audioPlayer');
+const albumCover = document.getElementById('albumCover');
+const trackInfo = document.getElementById('trackInfo');
+const trackTitle = document.getElementById('trackTitle');
+const trackArtist = document.getElementById('trackArtist');
+const playlistCount = document.getElementById('playlistCount');
+const manualTitleInput = document.getElementById('manualTitle');
+// REMOVED: const manualArtistInput = document.getElementById('manualArtist');
+const defaultCoverSrc = "data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==";
+
+let coverURL = null;	
+let playlist = [];	 	
+let currentTrackIndex = 0;
+
+function getCleanFileName(fileName) {
+	return fileName.replace(/\.[^/.]+$/, ""); // Remove extension
+}
+
+function updatePlaylistDisplay() {
+	if (playlist.length > 0) {
+		playlistCount.textContent = `Track ${currentTrackIndex + 1} of ${playlist.length}`;
+	} else {
+		playlistCount.textContent = '';
+		trackInfo.style.display = 'none';
+		albumCover.src = defaultCoverSrc;
+		albumCover.classList.remove('rotate');
+		manualTitleInput.value = '';
+		// REMOVED: manualArtistInput.value = '';
+	}
+}
+
+function displayTrackInfo(title, artist, coverData) {
+	albumCover.classList.remove('rotate');
+	if (coverURL) {
+		URL.revokeObjectURL(coverURL);
+		coverURL = null;
+	}
+
+	trackTitle.textContent = title;
+	trackArtist.textContent = artist;
+	
+	// Use 'flex' for the trackInfo div only on larger screens for alignment
+	// The CSS handles the display/alignment based on screen size using media queries
+	trackInfo.style.display = 'flex'; 
+	trackInfo.style.flexDirection = 'column';
+	trackInfo.style.justifyContent = 'center';
+
+	albumCover.style.display = 'block';
+
+	if (coverData) {
+		const picture = coverData;
+		const blob = new Blob([picture.data], { type: picture.format });
+		coverURL = URL.createObjectURL(blob);
+		albumCover.src = coverURL;
+	} else {
+		albumCover.src = defaultCoverSrc;
+	}
+	updatePlaylistDisplay();
+}
+
+async function loadAndPlayTrack(index) {
+	if (index >= 0 && index < playlist.length) {
+		currentTrackIndex = index;
+		const file = playlist[currentTrackIndex];
+
+		audioPlayer.src = URL.createObjectURL(file);
+		audioPlayer.load();
+		audioPlayer.play();
+
+		manualTitleInput.value = '';
+		// REMOVED: manualArtistInput.value = '';
+
+		// FIX: Explicitly check for the global musicMetadata object before use
+		if (!window.musicMetadata || typeof window.musicMetadata.parseBlob !== 'function') {
+			console.error('Error reading music metadata: Music metadata library is not fully loaded.');
+			
+			const title = getCleanFileName(file.name);
+			const artist = 'Local File (Metadata Unavailable)';
+			
+			manualTitleInput.value = title;
+			// REMOVED: manualArtistInput.value = '';
+			
+			displayTrackInfo(title, artist, null);
+			return; // Exit if the dependency is missing
+		}
+
+
+		try {
+			// FIX: Access global window.musicMetadata directly
+			const metadata = await window.musicMetadata.parseBlob(file); 
+			const tags = metadata.common;
+			
+			const title = tags.title || getCleanFileName(file.name);
+			const artist = tags.artist || 'Local File';
+			const cover = tags.picture && tags.picture.length > 0 ? tags.picture[0] : null;
+
+			displayTrackInfo(title, artist, cover);
+
+		} catch (error) {
+			console.error('Error reading music metadata:', error);
+			
+			const title = getCleanFileName(file.name);
+			const artist = 'Local File (No Metadata Found)';
+			
+			manualTitleInput.value = title;
+			// REMOVED: manualArtistInput.value = '';
+
+			displayTrackInfo(title, artist, null);
+		}
+	} else {
+		// Stop playback and reset if index is out of bounds
+		audioPlayer.pause();
+		audioPlayer.src = '';
+		currentTrackIndex = 0;
+		updatePlaylistDisplay();
+	}
+}
+
+function playNextTrack() {
+	if (currentTrackIndex + 1 < playlist.length) {
+		loadAndPlayTrack(currentTrackIndex + 1);
+	} else {
+		// Loop back to the first track
+		loadAndPlayTrack(0);
+	}
+}
+
+function updateManualDisplay() {
+	const title = manualTitleInput.value || 'Untitled Track';
+	// Artist is now hardcoded since the input was removed
+	const artist = 'Manual Entry'; 
+	
+	if (audioPlayer.src) {
+		displayTrackInfo(title, artist, null);	
+	}
+}
+
+musicFile.addEventListener('change', async (event) => {
+	playlist = Array.from(event.target.files).filter(file => file.type.startsWith('audio/'));
+
+	if (playlist.length > 0) {
+		loadAndPlayTrack(0);	
+	} else {
+		updatePlaylistDisplay();	
+	}
+});
+
+audioPlayer.addEventListener('ended', playNextTrack);
+manualTitleInput.addEventListener('input', updateManualDisplay);
+// REMOVED: manualArtistInput.addEventListener('input', updateManualDisplay);
+
+audioPlayer.addEventListener('play', () => {
+	albumCover.classList.add('rotate');
+});
+audioPlayer.addEventListener('pause', () => {
+	albumCover.classList.remove('rotate');
+});
+
+updatePlaylistDisplay();	
+
+render(); // Initial render after all setup
+}); // Close of window.addEventListener('load', ...)
+</script>
+</body>
+</html>
+
+
+</body><iframe data-testid="embed-iframe" style="border-radius:12px" src="https://open.spotify.com/embed/playlist/37i9dQZF1FbEnbS3zsgINl?utm_source=generator" width="52%" height="352" frameBorder="0" allowfullscreen="" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>
+</html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hovering Pomodoro Timer</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles for the expansion transition */
+        #timer-widget {
+            position: fixed;
+            bottom: 1rem;
+            right: 1rem;
+            
+            /* Initial Compact State: Small, circular, highly visible */
+            width: 90px;
+            height: 90px;
+            border-radius: 50%;
+            
+            /* General styling */
+            background-color: #2D3748; /* Dark background */
+            color: #E2E8F0; /* Light text */
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            
+            /* Smooth transitions for all properties */
+            transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+            overflow: hidden;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            cursor: pointer;
+            font-family: 'Inter', sans-serif;
+            border: 2px solid transparent;
+        }
+
+        /* Hover State: Expanded card */
+        #timer-widget:hover {
+            width: 320px;
+            height: 200px;
+            border-radius: 0.75rem; /* Rounded corners for the card */
+            background-color: #4A5568; /* Slightly lighter dark background on hover */
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.4);
+            border-color: #63B3ED; /* Highlight border */
+        }
+        
+        /* The main time display is always centered */
+        #timer-display {
+            font-size: 1.5rem;
+            font-weight: 700;
+            line-height: 1; /* Adjust line height to center better */
+        }
+        #timer-widget:hover #timer-display {
+            font-size: 3rem; /* Larger font when expanded */
+            margin-bottom: 0.5rem;
+        }
+
+        /* Full controls (mode buttons, control buttons) are hidden initially */
+        #full-controls {
+            opacity: 0;
+            visibility: hidden;
+            height: 0;
+            pointer-events: none; /* Disable interaction when hidden */
+            transition: opacity 0.3s ease-in-out 0.2s, height 0.4s ease-in-out;
+            padding: 0 1rem;
+            width: 100%;
+        }
+
+        /* Show full controls on hover */
+        #timer-widget:hover #full-controls {
+            opacity: 1;
+            visibility: visible;
+            height: auto;
+            pointer-events: auto; /* Enable interaction when visible */
+        }
+
+        /* Small status text visible in both states */
+        #mode-status {
+             font-size: 0.75rem;
+             color: #A0AEC0;
+             transition: opacity 0.3s ease-in-out 0.2s;
+        }
+
+        /* Adjust the compact state for better centering */
+        #timer-widget:not(:hover) #mode-status {
+            opacity: 0; /* Hide status text when compact */
+        }
+
+        /* Button styling */
+        .control-btn {
+            @apply p-2 rounded-full font-semibold text-sm transition duration-150 ease-in-out transform hover:scale-105;
+        }
+
+        /* Mode button styling */
+        .mode-btn {
+            @apply px-3 py-1 text-xs rounded-full transition duration-150 ease-in-out;
+        }
+
+    </style>
+    <script>
+        // Use Inter font for consistency with Tailwind defaults
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+
+    <div class="p-8 text-center">
+        <h1 class="text-4xl font-bold text-gray-800">Your Focus Space</h1>
+        <p class="mt-2 text-gray-600">The Pomodoro Timer is in the bottom right corner. Hover over it to expand the controls!</p>
+    </div>
+
+    <!-- POMODORO TIMER WIDGET -->
+    <div id="timer-widget">
+        <!-- Status Text (Visible when expanded) -->
+        <div id="mode-status" class="mb-1"></div>
+
+        <!-- Main Time Display -->
+        <div id="timer-display">25:00</div>
+        
+        <!-- Full Controls (Only visible on hover) -->
+        <div id="full-controls" class="space-y-3 mt-2">
+            
+            <!-- Mode Selection Buttons -->
+            <div class="flex justify-center space-x-2">
+                <button id="pomodoro-mode" class="mode-btn bg-blue-500 text-white hover:bg-blue-600">Focus</button>
+                <button id="short-break-mode" class="mode-btn bg-green-500 text-white hover:bg-green-600">Short Break</button>
+                <button id="long-break-mode" class="mode-btn bg-red-500 text-white hover:bg-red-600">Long Break</button>
+            </div>
+
+            <!-- Control Buttons -->
+            <div class="flex justify-center space-x-4">
+                <button id="start-pause-btn" class="control-btn bg-gray-600 text-white hover:bg-gray-700">Start</button>
+                <button id="reset-btn" class="control-btn bg-gray-600 text-white hover:bg-gray-700">Reset</button>
+            </div>
+        </div>
+    </div>
+    <!-- END WIDGET -->
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const display = document.getElementById('timer-display');
+            const status = document.getElementById('mode-status');
+            const startPauseBtn = document.getElementById('start-pause-btn');
+            const resetBtn = document.getElementById('reset-btn');
+            const pomodoroBtn = document.getElementById('pomodoro-mode');
+            const shortBreakBtn = document.getElementById('short-break-mode');
+            const longBreakBtn = document.getElementById('long-break-mode');
+
+            // Time settings in seconds
+            const TIMES = {
+                'pomodoro': 25 * 60,
+                'shortBreak': 5 * 60,
+                'longBreak': 15 * 60
+            };
+
+            let currentMode = 'pomodoro';
+            let timeLeft = TIMES[currentMode];
+            let isRunning = false;
+            let interval = null;
+
+            // Utility function to format seconds into MM:SS
+            function formatTime(seconds) {
+                const minutes = String(Math.floor(seconds / 60)).padStart(2, '0');
+                const secs = String(seconds % 60).padStart(2, '0');
+                return `${minutes}:${secs}`;
+            }
+
+            // Update the UI display and document title
+            function updateDisplay() {
+                display.textContent = formatTime(timeLeft);
+                document.title = `(${formatTime(timeLeft)}) - Pomodoro`;
+            }
+
+            // Update mode indicator and colors
+            function updateModeStatus() {
+                let text, colorClass;
+                
+                // Remove previous color classes
+                pomodoroBtn.classList.remove('ring-2', 'ring-blue-300');
+                shortBreakBtn.classList.remove('ring-2', 'ring-green-300');
+                longBreakBtn.classList.remove('ring-2', 'ring-red-300');
+                
+                const widget = document.getElementById('timer-widget');
+                widget.classList.remove('border-blue-500', 'border-green-500', 'border-red-500');
+
+
+                switch (currentMode) {
+                    case 'pomodoro':
+                        text = 'Focus Time';
+                        colorClass = 'border-blue-500';
+                        pomodoroBtn.classList.add('ring-2', 'ring-blue-300');
+                        break;
+                    case 'shortBreak':
+                        text = 'Short Break';
+                        colorClass = 'border-green-500';
+                        shortBreakBtn.classList.add('ring-2', 'ring-green-300');
+                        break;
+                    case 'longBreak':
+                        text = 'Long Break';
+                        colorClass = 'border-red-500';
+                        longBreakBtn.classList.add('ring-2', 'ring-red-300');
+                        break;
+                }
+                status.textContent = isRunning ? `[RUNNING] ${text}` : text;
+                widget.classList.add(colorClass);
+            }
+
+            // Main countdown function
+            function countdown() {
+                if (timeLeft > 0) {
+                    timeLeft--;
+                    updateDisplay();
+                } else {
+                    pauseTimer();
+                    
+                    // Simple message box instead of alert
+                    const widget = document.getElementById('timer-widget');
+                    const messageBox = document.createElement('div');
+                    
+                    let nextMode;
+                    if (currentMode === 'pomodoro') {
+                        messageBox.textContent = "Time for a break! Switching to Short Break.";
+                        nextMode = 'shortBreak';
+                    } else {
+                        messageBox.textContent = "Break is over! Switching to Focus Time.";
+                        nextMode = 'pomodoro';
+                    }
+                    
+                    messageBox.className = 'fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-yellow-400 text-gray-900 p-4 rounded-lg shadow-2xl font-bold z-[2000] transition-opacity duration-500';
+
+                    document.body.appendChild(messageBox);
+                    setTimeout(() => {
+                        messageBox.style.opacity = '0';
+                        setTimeout(() => messageBox.remove(), 500);
+                    }, 3000);
+
+                    // Auto-switch mode
+                    switchMode(nextMode);
+                    resetTimer();
+                }
+            }
+
+            function startTimer() {
+                if (!isRunning) {
+                    isRunning = true;
+                    startPauseBtn.textContent = 'Pause';
+                    startPauseBtn.classList.replace('bg-gray-600', 'bg-yellow-600');
+                    interval = setInterval(countdown, 1000);
+                    updateModeStatus();
+                }
+            }
+
+            function pauseTimer() {
+                if (isRunning) {
+                    isRunning = false;
+                    startPauseBtn.textContent = 'Start';
+                    startPauseBtn.classList.replace('bg-yellow-600', 'bg-gray-600');
+                    clearInterval(interval);
+                    updateModeStatus();
+                }
+            }
+
+            function resetTimer() {
+                pauseTimer(); // Ensure it's paused
+                timeLeft = TIMES[currentMode];
+                updateDisplay();
+                startPauseBtn.textContent = 'Start';
+            }
+
+            function switchMode(mode) {
+                currentMode = mode;
+                resetTimer(); // Reset the timer for the new mode's duration
+                updateModeStatus();
+            }
+
+            // Event Listeners
+            startPauseBtn.addEventListener('click', () => {
+                if (isRunning) {
+                    pauseTimer();
+                } else {
+                    startTimer();
+                }
+            });
+
+            resetBtn.addEventListener('click', resetTimer);
+            pomodoroBtn.addEventListener('click', () => switchMode('pomodoro'));
+            shortBreakBtn.addEventListener('click', () => switchMode('shortBreak'));
+            longBreakBtn.addEventListener('click', () => switchMode('longBreak'));
+
+            // Initial setup
+            updateDisplay();
+            updateModeStatus();
+        });
+    </script>
+</body>
+</html>
+
+
